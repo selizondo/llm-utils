@@ -1,3 +1,10 @@
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("llm-utils")
+except PackageNotFoundError:
+    __version__ = "0.0.0+dev"
+
 from .config import Settings, get_settings
 from .client import (
     get_client,

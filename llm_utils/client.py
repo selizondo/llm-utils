@@ -45,9 +45,14 @@ _judge_rate_limit_delay: float | None = None
 DEFAULT_TEMPERATURE: float = 0.7
 DEFAULT_MAX_TOKENS: int = 1500
 DEFAULT_MAX_RETRIES: int = 3
-DEFAULT_RETRY_WAIT: float = 60.0      # fallback wait when provider gives no retry-after
-TPD_THRESHOLD: float = 300.0          # retry-after above this = daily limit; raise immediately
-INSTRUCTOR_INTERNAL_RETRIES: int = 3  # instructor-level validation retries
+DEFAULT_RETRY_WAIT: float = 60.0
+# Fallback when provider gives no retry-after header. Groq's TPM rolling window
+# resets in ~60s based on observed behavior; this covers the common transient case.
+TPD_THRESHOLD: float = 300.0
+# retry-after values above 300s indicate daily quota exhaustion (Groq TPD rolling
+# window sends 1m21s for TPM, but >5m signals TPD). Raise immediately rather than
+# sleeping for hours — caller should retry after UTC midnight or switch keys.
+INSTRUCTOR_INTERNAL_RETRIES: int = 3  # instructor-level validation retries before raising
 
 # ── Judge system prompts ───────────────────────────────────────────────────────
 
