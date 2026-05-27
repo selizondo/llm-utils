@@ -24,6 +24,16 @@ Ollama's API does not support OpenAI function-calling format, so `instructor.Mod
 
 When the judge model returns an unparseable response, `judge_binary` returns 0 (fail) by default. The alternative — default 1 (pass) — would silently accept bad output as high-quality. A false negative (rejecting good output) is recoverable; a false positive (accepting bad output into the dataset) is not. Callers can override with `default_on_error=1` for contexts where a failed judge call should not block the pipeline.
 
-## No importlib.metadata version export
+## importlib.metadata version export
 
-The package version (`0.1.0` in `pyproject.toml`) is not exported as `llm_utils.__version__`. This was identified as a gap in the staff review. The fix is one line: `from importlib.metadata import version; __version__ = version("llm-utils")` in `__init__.py`. Left unresolved because downstream projects pin by git hash, not version string.
+`llm_utils.__version__` is populated from package metadata with a `PackageNotFoundError` fallback for uninstalled dev environments:
+
+```python
+from importlib.metadata import version, PackageNotFoundError
+try:
+    __version__ = version("llm-utils")
+except PackageNotFoundError:
+    __version__ = "0.0.0+dev"
+```
+
+The fallback ensures the import never fails in a `pip install -e .` or bare-clone context where the package isn't registered with the Python environment.
