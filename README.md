@@ -1,6 +1,6 @@
 # llm-utils
 
-Shared LLM client library used by all newline_labs projects. Wraps the OpenAI Python SDK with [instructor](https://github.com/jxnl/instructor) for structured outputs, rate-limit backoff, and an observability hook pattern.
+Shared LLM client library used by various projects. Wraps the OpenAI Python SDK with [instructor](https://github.com/jxnl/instructor) for structured outputs, rate-limit backoff, and an observability hook pattern.
 
 ---
 
