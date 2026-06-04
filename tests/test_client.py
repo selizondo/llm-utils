@@ -4,14 +4,13 @@ Unit tests for llm_utils.client — rate-limit backoff, TPD detection, and obs_f
 All tests mock the OpenAI client and instructor — no real API calls.
 """
 
-import time
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import pytest
 
-from openai import RateLimitError
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llm_utils.client import (
@@ -26,6 +25,7 @@ from llm_utils.client import (
 # ---------------------------------------------------------------------------
 # _parse_retry_after
 # ---------------------------------------------------------------------------
+
 
 class TestParseRetryAfter:
     def test_plain_seconds_format(self):
@@ -82,6 +82,7 @@ class TestParseRetryAfter:
 # ---------------------------------------------------------------------------
 # _call_obs
 # ---------------------------------------------------------------------------
+
 
 class TestCallObs:
     def test_obs_fn_called_with_all_kwargs_on_success(self):
@@ -145,6 +146,7 @@ class TestCallObs:
 # ---------------------------------------------------------------------------
 # judge_binary
 # ---------------------------------------------------------------------------
+
 
 class TestJudgeBinary:
     def _make_response(self, content: str):

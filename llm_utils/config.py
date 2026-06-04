@@ -45,12 +45,12 @@ def get_settings() -> Settings:
     judge_base_url = os.getenv("LLM_JUDGE_BASE_URL", base_url)
     judge_api_key = os.getenv("LLM_JUDGE_API_KEY", api_key)
     judge_model = os.getenv("LLM_JUDGE_MODEL", generation_model)
-    judge_rate_limit_delay = float(os.getenv("LLM_JUDGE_RATE_LIMIT_DELAY", str(rate_limit_delay)))
+    judge_rate_limit_delay = float(
+        os.getenv("LLM_JUDGE_RATE_LIMIT_DELAY", str(rate_limit_delay))
+    )
 
     if not api_key:
-        raise ValueError(
-            "LLM_API_KEY is not set. Add it to your .env file."
-        )
+        raise ValueError("LLM_API_KEY is not set. Add it to your .env file.")
 
     return Settings(
         base_url=base_url,

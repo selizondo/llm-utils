@@ -2,6 +2,20 @@
 
 Shared LLM client library used by various projects. Wraps the OpenAI Python SDK with [instructor](https://github.com/jxnl/instructor) for structured outputs, rate-limit backoff, and an observability hook pattern.
 
+*See [docs/tradeoffs.md](docs/tradeoffs.md) for design decisions and [docs/failures.md](docs/failures.md) for known failure modes.*
+
+---
+
+## Key Concepts
+
+**Dual client** — generation and judge are separate `OpenAI` client instances, each with independent base URL, API key, model, and rate-limit delay. When unset, judge vars inherit generation values so the default is a single model. Pointing judge at a cheaper model is a one-line env change with no code impact.
+
+**Rate-limit backoff vs daily quota** — provider 429s carry a `retry-after` header. `client.py` parses both seconds (`60`) and `Mm Ss` (`1m 30s`) formats. Wait ≤ `TPD_THRESHOLD = 300.0s` → transient TPM throttle → sleep and retry. Wait > threshold → daily token quota exhausted → raise `RuntimeError` immediately so the caller can checkpoint rather than sleep for hours.
+
+**Structured outputs via instructor** — `instructor_complete()` wraps the OpenAI call with an `instructor` client that enforces a Pydantic response schema, retrying on parse failures up to the configured limit. The caller gets a typed object, not a raw string.
+
+**Observability hook** — every call site accepts an optional `obs_fn=` callable. When provided it's called with `(model, input_messages, output, duration_ms, error, extra_attributes)` on both success and error. Wire Logfire, Langfuse, or a plain logger without modifying call sites.
+
 ---
 
 ## What it does

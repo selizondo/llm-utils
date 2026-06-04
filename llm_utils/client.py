@@ -52,14 +52,13 @@ TPD_THRESHOLD: float = 300.0
 # retry-after values above 300s indicate daily quota exhaustion (Groq TPD rolling
 # window sends 1m21s for TPM, but >5m signals TPD). Raise immediately rather than
 # sleeping for hours — caller should retry after UTC midnight or switch keys.
-INSTRUCTOR_INTERNAL_RETRIES: int = 3  # instructor-level validation retries before raising
+INSTRUCTOR_INTERNAL_RETRIES: int = (
+    3  # instructor-level validation retries before raising
+)
 
 # ── Judge system prompts ───────────────────────────────────────────────────────
 
-JUDGE_SYSTEM = (
-    "You are a quality evaluator. "
-    "Respond with exactly one digit: 0 or 1."
-)
+JUDGE_SYSTEM = "You are a quality evaluator. Respond with exactly one digit: 0 or 1."
 
 JUDGE_BATCH_SYSTEM = (
     "You are a quality evaluator. "
@@ -132,7 +131,9 @@ def get_instructor_client(settings: Settings | None = None) -> instructor.Instru
     return _gen_instructor_client
 
 
-def get_judge_instructor_client(settings: Settings | None = None) -> instructor.Instructor:
+def get_judge_instructor_client(
+    settings: Settings | None = None,
+) -> instructor.Instructor:
     """Return the cached instructor-patched judge client."""
     global _judge_instructor_client
     if _judge_instructor_client is None:
@@ -160,7 +161,16 @@ def _is_rate_limit(exc: Exception) -> bool:
     return isinstance(exc, RateLimitError) or "429" in str(exc)
 
 
-def _call_obs(obs_fn, *, model, input_messages, output, duration_ms, error=None, extra_attributes=None):
+def _call_obs(
+    obs_fn,
+    *,
+    model,
+    input_messages,
+    output,
+    duration_ms,
+    error=None,
+    extra_attributes=None,
+):
     if obs_fn is not None:
         obs_fn(
             model=model,
@@ -173,6 +183,7 @@ def _call_obs(obs_fn, *, model, input_messages, output, duration_ms, error=None,
 
 
 # ── Public call functions ──────────────────────────────────────────────────────
+
 
 def instructor_complete(
     messages: list[dict],
@@ -201,27 +212,49 @@ def instructor_complete(
                 max_tokens=max_tokens,
                 max_retries=INSTRUCTOR_INTERNAL_RETRIES,
             )
-            _call_obs(obs_fn, model=model, input_messages=messages, output=result,
-                      duration_ms=(time.monotonic() - _t0) * 1000)
+            _call_obs(
+                obs_fn,
+                model=model,
+                input_messages=messages,
+                output=result,
+                duration_ms=(time.monotonic() - _t0) * 1000,
+            )
             time.sleep(_gen_delay())
             return result
         except InstructorRetryException as exc:
             if not _is_rate_limit(exc):
-                _call_obs(obs_fn, model=model, input_messages=messages, output=None,
-                          duration_ms=(time.monotonic() - _t0) * 1000, error=exc,
-                          extra_attributes={"validation_attempts": getattr(exc, "n_attempts", None)})
+                _call_obs(
+                    obs_fn,
+                    model=model,
+                    input_messages=messages,
+                    output=None,
+                    duration_ms=(time.monotonic() - _t0) * 1000,
+                    error=exc,
+                    extra_attributes={
+                        "validation_attempts": getattr(exc, "n_attempts", None)
+                    },
+                )
                 raise
             wait = _parse_retry_after(exc)
             if attempt == max_retries:
                 raise
-            print(f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...", end="", flush=True)
+            print(
+                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
+                end="",
+                flush=True,
+            )
             time.sleep(wait)
         except RateLimitError as exc:
             wait = _parse_retry_after(exc)
             if attempt == max_retries:
                 raise
-            print(f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...", end="", flush=True)
+            print(
+                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
+                end="",
+                flush=True,
+            )
             time.sleep(wait)
+    raise RuntimeError("unreachable: max retries exceeded")
 
 
 def chat_complete(
@@ -253,8 +286,13 @@ def chat_complete(
             wait = _parse_retry_after(exc)
             if attempt == max_retries:
                 raise
-            print(f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...", end="", flush=True)
+            print(
+                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
+                end="",
+                flush=True,
+            )
             time.sleep(wait)
+    raise RuntimeError("unreachable: max retries exceeded")
 
 
 def judge_binary(
@@ -274,15 +312,28 @@ def judge_binary(
     ]
     _t0 = time.monotonic()
     try:
-        raw = chat_complete(messages, model=model, temperature=0.1, max_tokens=10, use_judge_client=True)
+        raw = chat_complete(
+            messages, model=model, temperature=0.1, max_tokens=10, use_judge_client=True
+        )
         digit = raw.strip()[0] if raw.strip() else ""
         result = int(digit) if digit in ("0", "1") else default_on_error
-        _call_obs(obs_fn, model=model, input_messages=messages, output=str(result),
-                  duration_ms=(time.monotonic() - _t0) * 1000)
+        _call_obs(
+            obs_fn,
+            model=model,
+            input_messages=messages,
+            output=str(result),
+            duration_ms=(time.monotonic() - _t0) * 1000,
+        )
         return result
     except Exception as exc:
-        _call_obs(obs_fn, model=model, input_messages=messages, output=None,
-                  duration_ms=(time.monotonic() - _t0) * 1000, error=exc)
+        _call_obs(
+            obs_fn,
+            model=model,
+            input_messages=messages,
+            output=None,
+            duration_ms=(time.monotonic() - _t0) * 1000,
+            error=exc,
+        )
         return default_on_error
 
 
@@ -314,23 +365,43 @@ def judge_batch(
                 max_tokens=500,
                 max_retries=INSTRUCTOR_INTERNAL_RETRIES,
             )
-            _call_obs(obs_fn, model=model, input_messages=messages, output=result,
-                      duration_ms=(time.monotonic() - _t0) * 1000)
+            _call_obs(
+                obs_fn,
+                model=model,
+                input_messages=messages,
+                output=result,
+                duration_ms=(time.monotonic() - _t0) * 1000,
+            )
             time.sleep(_judge_delay())
             return result
         except InstructorRetryException as exc:
             if not _is_rate_limit(exc):
-                _call_obs(obs_fn, model=model, input_messages=messages, output=None,
-                          duration_ms=(time.monotonic() - _t0) * 1000, error=exc)
+                _call_obs(
+                    obs_fn,
+                    model=model,
+                    input_messages=messages,
+                    output=None,
+                    duration_ms=(time.monotonic() - _t0) * 1000,
+                    error=exc,
+                )
                 raise
             wait = _parse_retry_after(exc)
             if attempt == max_retries:
                 raise
-            print(f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...", end="", flush=True)
+            print(
+                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
+                end="",
+                flush=True,
+            )
             time.sleep(wait)
         except RateLimitError as exc:
             wait = _parse_retry_after(exc)
             if attempt == max_retries:
                 raise
-            print(f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...", end="", flush=True)
+            print(
+                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
+                end="",
+                flush=True,
+            )
             time.sleep(wait)
+    raise RuntimeError("unreachable: max retries exceeded")
