@@ -1,5 +1,7 @@
 # llm-utils
 
+![Tests](https://github.com/selizondo/llm-utils/actions/workflows/ci.yml/badge.svg)
+
 Shared LLM client library used by various projects. Wraps the OpenAI Python SDK with [instructor](https://github.com/jxnl/instructor) for structured outputs, rate-limit backoff, and an observability hook pattern.
 
 *See [docs/tradeoffs.md](docs/tradeoffs.md) for design decisions and [docs/failures.md](docs/failures.md) for known failure modes.*
