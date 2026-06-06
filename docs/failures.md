@@ -10,7 +10,7 @@ Documented failure modes with detection mechanisms and fallback behavior.
 A generation batch hits the provider's daily TPM/TPD limit mid-run. Without protection, all remaining calls return 429 and the batch fails silently or raises after exhausting retries.
 
 ### Detection mechanism
-`client.py` parses the `retry-after` header from the 429 response. If the wait time exceeds `TPD_THRESHOLD = 300.0s`, it's treated as a daily quota exhaustion (not a transient rate limit) and raises `RuntimeError` immediately with the message: `"Daily token quota exhausted — retry after UTC midnight"`. Under the threshold, it sleeps and retries.
+`client.py` parses the `retry-after` header from the 429 response. If the wait time exceeds `TPD_THRESHOLD = 300.0s`, it's treated as a daily quota exhaustion (not a transient rate limit) and raises `RuntimeError` immediately with the message: `"Daily token quota exhausted: retry after UTC midnight"`. Under the threshold, it sleeps and retries.
 
 ### Fallback behavior
 Raise immediately so the caller can checkpoint what was completed and resume tomorrow, rather than sleeping for hours or silently returning partial results.
@@ -36,7 +36,7 @@ The caller is responsible for catching `InstructorRetryException`. Pattern used 
 `Settings` inherits judge vars from generation vars when unset. If both are pointed at the same model on the same account, rate-limit backoff from generation calls delays judge calls too, even if they're on separate clients.
 
 ### Detection mechanism
-Not detected — this is a configuration responsibility. The `get_settings()` output logs both `LLM_BASE_URL` and `LLM_JUDGE_BASE_URL` at startup so the caller can verify they're independent when needed.
+Not detected: this is a configuration responsibility. The `get_settings()` output logs both `LLM_BASE_URL` and `LLM_JUDGE_BASE_URL` at startup so the caller can verify they're independent when needed.
 
 ### Fallback behavior
 Set `LLM_JUDGE_BASE_URL`, `LLM_JUDGE_API_KEY`, and `LLM_JUDGE_MODEL` explicitly to a separate endpoint or model to decouple the rate limits.
