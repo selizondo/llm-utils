@@ -34,6 +34,7 @@ T = TypeVar("T", bound=BaseModel)
 
 _gen_client: OpenAI | None = None
 _gen_instructor_client: instructor.Instructor | None = None
+_gen_instructor_model: str = ""
 _gen_rate_limit_delay: float | None = None
 
 _judge_client: OpenAI | None = None
@@ -93,11 +94,27 @@ def _parse_retry_after(exc: Exception) -> float:
     return wait
 
 
-def _instructor_mode(base_url: str) -> instructor.Mode:
-    """JSON mode for Ollama; TOOLS mode for cloud providers."""
-    if "localhost" in base_url or "11434" in base_url:
-        return instructor.Mode.JSON
-    return instructor.Mode.TOOLS
+# Models that benefit from Ollama's native schema enforcement (JSON_SCHEMA mode)
+# rather than prompt-embedded schema (JSON mode). These models tend to echo the
+# schema back instead of filling it in when given Mode.JSON.
+_OLLAMA_JSON_SCHEMA_MODELS = {"mistral", "llama3", "llama3.1", "llama3.2", "phi3", "phi3.5", "gemma", "deepseek"}
+
+
+def _instructor_mode(base_url: str, model: str = "") -> instructor.Mode:
+    """Select instructor mode based on provider and model family.
+
+    Cloud providers use TOOLS (function calling). For Ollama, qwen family
+    uses JSON (proven reliable for structured output); mistral, llama3, and
+    other families use JSON_SCHEMA (Ollama native schema enforcement — avoids
+    schema-echoing where the model returns the schema definition rather than
+    filling it in with values).
+    """
+    if "localhost" not in base_url and "11434" not in base_url:
+        return instructor.Mode.TOOLS
+    model_root = model.lower().split(":")[0]  # strip tag: "mistral:7b" → "mistral"
+    if any(model_root.startswith(m) for m in _OLLAMA_JSON_SCHEMA_MODELS):
+        return instructor.Mode.JSON_SCHEMA
+    return instructor.Mode.JSON  # qwen and unknown: proven JSON mode
 
 
 def get_client(settings: Settings | None = None) -> OpenAI:
@@ -120,14 +137,21 @@ def get_judge_client(settings: Settings | None = None) -> OpenAI:
     return _judge_client
 
 
-def get_instructor_client(settings: Settings | None = None) -> instructor.Instructor:
-    """Return the cached instructor-patched generation client."""
-    global _gen_instructor_client
-    if _gen_instructor_client is None:
+def get_instructor_client(
+    settings: Settings | None = None, model: str = ""
+) -> instructor.Instructor:
+    """Return the cached instructor-patched generation client.
+
+    Recreates the client when the model changes so that model-specific
+    instructor modes (JSON vs JSON_SCHEMA) are applied correctly.
+    """
+    global _gen_instructor_client, _gen_instructor_model
+    if _gen_instructor_client is None or model != _gen_instructor_model:
         s = settings or get_settings()
         _gen_instructor_client = instructor.from_openai(
-            get_client(settings), mode=_instructor_mode(s.base_url)
+            get_client(settings), mode=_instructor_mode(s.base_url, model)
         )
+        _gen_instructor_model = model
     return _gen_instructor_client
 
 
@@ -200,7 +224,7 @@ def instructor_complete(
     Raises RuntimeError immediately if the provider signals a daily quota exhaustion.
     obs_fn is called with keyword args on success and on non-rate-limit error.
     """
-    client = get_instructor_client()
+    client = get_instructor_client(model=model)
     _t0 = time.monotonic()
     for attempt in range(max_retries + 1):
         try:
