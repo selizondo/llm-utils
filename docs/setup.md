@@ -1,5 +1,17 @@
 # Setup and Usage
 
+## Key Concepts
+
+**Dual client:** Generation and judge each have their own model, API key, base URL, and rate-limit state. Allows pointing the judge at a cheaper model with a single env change. Default: judge inherits generation values, so a single model works out of the box.
+
+**Rate-limit handling:** Provider 429s carry a `retry-after` header. `client.py` distinguishes throttle (transient TPM, sleep and retry) from quota exhaustion (wait over 300s threshold → raise immediately). Prevents silent sleeps during quota runout.
+
+**Structured outputs via instructor:** `instructor_complete()` enforces a Pydantic response schema, retrying on parse failures. Caller gets typed objects, not raw strings. `judge_batch()` scores all criteria in a single call.
+
+**Observability hook pattern:** Every call site accepts optional `obs_fn=` callable. Receives (model, messages, output, duration_ms, error, extra_attributes). Wire any observability tool (Langfuse, Logfire, custom logger) without modifying call sites.
+
+---
+
 ## Installation
 
 ```bash

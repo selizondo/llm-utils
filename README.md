@@ -6,6 +6,15 @@ Calling an LLM is three lines. Calling it reliably, with a separate judge model,
 
 **Stack:** Python · OpenAI SDK · instructor · Pydantic
 
+## Related Projects
+
+Used by:
+- [rag-pipeline-from-scratch](https://github.com/selizondo/rag-pipeline-from-scratch)
+- [llm-eval-harness](https://github.com/selizondo/llm-eval-harness)
+- [synthetic-data-diy](https://github.com/selizondo/synthetic-data-diy)
+
+---
+
 ## What It Provides
 
 ### Dual client: generation and judge are independent
@@ -23,10 +32,6 @@ Provider 429s carry a `retry-after` header. `client.py` parses both seconds and 
 ### Observability hook pattern
 
 Every call site accepts an optional `obs_fn=` callable. Called with `(model, input_messages, output, duration_ms, error, extra_attributes)` on both success and error. Wire Langfuse, Logfire, or a plain logger without modifying call sites.
-
-**Related projects:** Used by [rag-pipeline-from-scratch](https://github.com/selizondo/rag-pipeline-from-scratch), [llm-eval-harness](https://github.com/selizondo/llm-eval-harness), [synthetic-data-diy](https://github.com/selizondo/synthetic-data-diy), and other repos in this portfolio.
-
----
 
 ## Go Deeper
 
