@@ -281,6 +281,40 @@ def instructor_complete(
     raise RuntimeError("unreachable: max retries exceeded")
 
 
+def _complete_with_retry(
+    messages: list[dict],
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    max_retries: int,
+    use_judge_client: bool,
+):
+    """Shared retry loop. Returns the raw OpenAI-SDK response object."""
+    client = get_judge_client() if use_judge_client else get_client()
+    rate_delay = _judge_delay() if use_judge_client else _gen_delay()
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            time.sleep(rate_delay)
+            return response
+        except RateLimitError as exc:
+            wait = _parse_retry_after(exc)
+            if attempt == max_retries:
+                raise
+            print(
+                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
+                end="",
+                flush=True,
+            )
+            time.sleep(wait)
+    raise RuntimeError("unreachable: max retries exceeded")
+
+
 def chat_complete(
     messages: list[dict],
     model: str,
@@ -294,29 +328,38 @@ def chat_complete(
     Set use_judge_client=True to route through the judge endpoint.
     Retries on 429 using the provider-supplied retry-after time.
     """
-    client = get_judge_client() if use_judge_client else get_client()
-    rate_delay = _judge_delay() if use_judge_client else _gen_delay()
-    for attempt in range(max_retries + 1):
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            time.sleep(rate_delay)
-            return response.choices[0].message.content or ""
-        except RateLimitError as exc:
-            wait = _parse_retry_after(exc)
-            if attempt == max_retries:
-                raise
-            print(
-                f"\n  [rate limit] waiting {wait:.0f}s (attempt {attempt + 1}/{max_retries})...",
-                end="",
-                flush=True,
-            )
-            time.sleep(wait)
-    raise RuntimeError("unreachable: max retries exceeded")
+    response = _complete_with_retry(
+        messages, model, temperature, max_tokens, max_retries, use_judge_client
+    )
+    return response.choices[0].message.content or ""
+
+
+def chat_complete_with_usage(
+    messages: list[dict],
+    model: str,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    use_judge_client: bool = False,
+) -> tuple[str, dict]:
+    """Like chat_complete, but also returns token usage for cost accounting.
+
+    Returns (content, usage) where usage is
+    {"prompt_tokens": int, "completion_tokens": int, "total_tokens": int},
+    or {} if the provider response doesn't include usage data.
+    """
+    response = _complete_with_retry(
+        messages, model, temperature, max_tokens, max_retries, use_judge_client
+    )
+    content = response.choices[0].message.content or ""
+    usage = {}
+    if response.usage is not None:
+        usage = {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+        }
+    return content, usage
 
 
 def judge_binary(

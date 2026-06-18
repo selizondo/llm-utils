@@ -18,6 +18,8 @@ from llm_utils.client import (
     DEFAULT_RETRY_WAIT,
     TPD_THRESHOLD,
     _call_obs,
+    chat_complete,
+    chat_complete_with_usage,
     judge_binary,
 )
 
@@ -226,3 +228,60 @@ class TestJudgeBinary:
         _, kwargs = obs.call_args
         assert kwargs["output"] is None
         assert isinstance(kwargs["error"], ValueError)
+
+
+# ---------------------------------------------------------------------------
+# chat_complete / chat_complete_with_usage
+# ---------------------------------------------------------------------------
+
+
+class TestChatCompleteWithUsage:
+    def _make_response(self, content: str, usage: dict | None):
+        msg = MagicMock()
+        msg.content = content
+        choice = MagicMock()
+        choice.message = msg
+        response = MagicMock()
+        response.choices = [choice]
+        if usage is None:
+            response.usage = None
+        else:
+            response.usage = MagicMock(**usage)
+        return response
+
+    @patch("llm_utils.client.get_client")
+    @patch("llm_utils.client._gen_delay", return_value=0.0)
+    def test_chat_complete_unchanged_returns_only_content(self, mock_delay, mock_get_client):
+        """Existing chat_complete callers must keep getting a plain string."""
+        client = MagicMock()
+        client.chat.completions.create.return_value = self._make_response(
+            "hello", {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        )
+        mock_get_client.return_value = client
+
+        result = chat_complete([{"role": "user", "content": "hi"}], model="m")
+        assert result == "hello"
+
+    @patch("llm_utils.client.get_client")
+    @patch("llm_utils.client._gen_delay", return_value=0.0)
+    def test_with_usage_returns_content_and_token_counts(self, mock_delay, mock_get_client):
+        client = MagicMock()
+        client.chat.completions.create.return_value = self._make_response(
+            "hello", {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        )
+        mock_get_client.return_value = client
+
+        content, usage = chat_complete_with_usage([{"role": "user", "content": "hi"}], model="m")
+        assert content == "hello"
+        assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+
+    @patch("llm_utils.client.get_client")
+    @patch("llm_utils.client._gen_delay", return_value=0.0)
+    def test_with_usage_returns_empty_dict_when_provider_omits_usage(self, mock_delay, mock_get_client):
+        client = MagicMock()
+        client.chat.completions.create.return_value = self._make_response("hello", None)
+        mock_get_client.return_value = client
+
+        content, usage = chat_complete_with_usage([{"role": "user", "content": "hi"}], model="m")
+        assert content == "hello"
+        assert usage == {}
